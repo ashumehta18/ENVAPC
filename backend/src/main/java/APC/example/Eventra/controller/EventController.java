@@ -53,6 +53,64 @@ public class EventController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/book")
+    public ResponseEntity<Map<String, Object>> bookEvent(@RequestBody Map<String, Object> request) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Extract data from request
+        String userId = request.get("userId").toString();
+        String eventId = request.get("eventId") != null ? request.get("eventId").toString() : null;
+        
+        if (userId == null || eventId == null) {
+            response.put("success", false);
+            response.put("message", "User ID and Event ID are required");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        // Get user details
+        Optional<User> userOptional = userService.findById(userId);
+        if (userOptional.isEmpty()) {
+            response.put("success", false);
+            response.put("message", "User not found");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        User user = userOptional.get();
+        
+        // Check if event exists
+        Optional<Event> eventOptional = eventService.getEventById(eventId);
+        if (eventOptional.isEmpty()) {
+            response.put("success", false);
+            response.put("message", "Event not found");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        Event event = eventOptional.get();
+        
+        // Check if user already booked this event
+        if (eventService.isEventBookedByUser(eventId, userId)) {
+            response.put("success", false);
+            response.put("message", "You have already booked this event");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        // Attempt to book the ticket
+        boolean bookingSuccess = eventService.bookTicket(eventId, userId, user.getEmail(), 
+                user.getFirstName() + " " + user.getLastName());
+
+        if (bookingSuccess) {
+            response.put("success", true);
+            response.put("message", "Ticket booked successfully!");
+            response.put("eventName", event.getName());
+            response.put("price", event.getPrice());
+        } else {
+            response.put("success", false);
+            response.put("message", "Unable to book ticket. Event may be sold out.");
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{eventId}/book")
     public ResponseEntity<Map<String, Object>> bookTicket(
             @PathVariable String eventId, 
@@ -129,6 +187,31 @@ public class EventController {
         Map<String, Object> response = new HashMap<>();
         
         response.put("success", true);
+        response.put("totalBookings", bookings.size());
+        response.put("bookings", bookings);
+        
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{eventId}/bookings")
+    public ResponseEntity<Map<String, Object>> getEventBookings(@PathVariable String eventId) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Check if event exists
+        Optional<Event> eventOptional = eventService.getEventById(eventId);
+        if (eventOptional.isEmpty()) {
+            response.put("success", false);
+            response.put("message", "Event not found");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        Event event = eventOptional.get();
+        List<Booking> bookings = eventService.getAllBookings().stream()
+                .filter(booking -> eventId.equals(booking.getEventId()))
+                .toList();
+        
+        response.put("success", true);
+        response.put("eventName", event.getName());
         response.put("totalBookings", bookings.size());
         response.put("bookings", bookings);
         
